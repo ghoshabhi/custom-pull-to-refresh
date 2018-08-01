@@ -18,49 +18,113 @@ const data = Array(10)
   .fill()
   .map((_, i) => `Item #${i}`);
 
+const MIN_PULLDOWN_DISTANCE = -100;
+
 export default class App extends React.Component {
   state = {
     data,
-    refreshing: false
+    refreshing: false,
+    readyToRefresh: false,
+    scrollY: new Animated.Value(0)
   };
 
-  _onRefresh = () => {
-    this.setState({
-      refreshing: true
-    });
-    setTimeout(() => {
-      this.setState({ refreshing: false });
-    }, 2000);
+  componentDidMount() {
+    this.state.scrollY.addListener(value => this.handleScroll(value));
+  }
+
+  componentWillUnmount() {
+    this.state.scrollY.removeAllListeners();
+  }
+
+  handleRelease = () => {
+    console.log(this.refs);
+    if (this.state.readyToRefresh) {
+      this.refs &&
+        this.refs.flatlist &&
+        this.refs.flatlist.scrollToOffset &&
+        this.refs.flatlist.scrollToOffset({
+          offset: -130,
+          animated: true
+        });
+      this.setState({ refreshing: true });
+      setTimeout(() => {
+        this.refs &&
+          this.refs.flatlist &&
+          this.refs.flatlist.scrollToOffset &&
+          this.refs.flatlist.scrollToOffset({
+            offset: 0,
+            animated: true
+          });
+        this.setState({ refreshing: false });
+      }, 2000);
+    }
+    return this.setState({ readyToRefresh: false });
+  };
+
+  handleScroll = pullDownDistance => {
+    console.log(pullDownDistance);
+    if (pullDownDistance.value <= MIN_PULLDOWN_DISTANCE) {
+      return this.setState({ readyToRefresh: true });
+    }
   };
 
   render() {
+    const animatedEvent = new Animated.event([
+      {
+        nativeEvent: {
+          contentOffset: {
+            y: this.state.scrollY
+          }
+        }
+      }
+    ]);
+
+    const interpolatedRotateClockwise = this.state.scrollY.interpolate({
+      inputRange: [-200, 0],
+      outputRange: ["0deg", "360deg"]
+    });
+
+    const interpolatedRotateAntiClockwise = this.state.scrollY.interpolate({
+      inputRange: [-200, 0],
+      outputRange: ["0deg", "-360deg"]
+    });
+
     return (
       <SafeAreaView style={styles.scrollView}>
         <View style={styles.topBar}>
           <Text style={styles.navText}>PTR Animation</Text>
         </View>
+        <View style={[styles.fillParent]}>
+          <GearsIndicator
+            scrollPosition={this.state.scrollY}
+            clockwiseRotation={interpolatedRotateClockwise}
+            anticlockwiseRotation={interpolatedRotateAntiClockwise}
+            refreshing={this.state.refreshing}
+          />
+        </View>
         <View style={styles.fillParent}>
           <FlatList
             data={this.state.data}
             keyExtractor={item => uuidv1()}
-            ref={"PTRFlatListView"}
-            onScrollBeginDrag={props => console.log("start")}
-            onScrollEndDrag={props => console.log("end")}
+            ref="flatlist"
+            onScroll={animatedEvent}
+            scrollEventThrottle={16}
+            onResponderRelease={this.handleRelease}
             renderItem={({ item }) => (
               <View style={styles.row}>
                 <Text style={styles.rowText}>{item}</Text>
               </View>
             )}
-            refreshControl={
-              <RefreshControl
-                refreshing={this.state.refreshing}
-                onRefresh={this._onRefresh}
-              >
-                <View style={[styles.fillParent, { top: 0 }]}>
-                  <GearsIndicator />
-                </View>
-              </RefreshControl>
-            }
+            // refreshControl={
+            //   <RefreshControl
+            //     refreshing={this.state.refreshing}
+            //     onRefresh={this._onRefresh}
+            //   >
+            //     <View style={[styles.fillParent, { top: 0 }]}>
+            //       <GearsIndicator />
+            //     </View>
+            //   </RefreshControl>
+            // }
           />
         </View>
       </SafeAreaView>
